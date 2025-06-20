@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgres:15
+    container_name: steg_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: loto_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - steg_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Using MongoDB Atlas cloud service instead of local MongoDB
+  # Connection string: mongodb+srv://fedimechergui03:IKRB1w8GebUNDdMX@cluster0.yvrsglh.mongodb.net/steg_loto
+
+  # Admin Tools
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: steg_pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@steg.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    networks:
+      - steg_network
+
+  # Mongo Express removed since we're using MongoDB Atlas cloud service
+
+  # Application Services
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: steg_backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Real PostgreSQL Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/loto_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL-AUTO: update
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_SHOW-SQL: true
+      
+      # Real MongoDB Configuration
+      SPRING_DATA_MONGODB_URI: mongodb+srv://fedimechergui03:IKRB1w8GebUNDdMX@cluster0.yvrsglh.mongodb.net/steg_loto?retryWrites=true&w=majority&appName=Cluster0
+      
+      # Real JWT Configuration
+      JWT_SECRET: steg_secure_key_2024_very_long_and_secure_secret_key_for_jwt_tokens
+      JWT_EXPIRATION_MS: 86400000
+      
+      # Logging Configuration
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: DEBUG
+      LOGGING_LEVEL_COM_STEG_LOTO: DEBUG
+      
+      # Schema Initialization
+      SPRING_SQL_INIT_MODE: always
+      SPRING_SQL_INIT_SCHEMA-LOCATIONS: classpath:schema.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - steg_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: steg_frontend
+    ports:
+      - "80:80"
+    environment:
+      API_URL: http://backend:8080
+      # This environment variable will be used during the build process
+      # to configure the API endpoint in the frontend application
+    depends_on:
+      - backend
+    networks:
+      - steg_network
+
+networks:
+  steg_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

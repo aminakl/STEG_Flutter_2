@@ -1,0 +1,6 @@
+@echo off
+echo Starting STEG LOTO Application...
+
+cd frontend
+echo Running Flutter application...
+flutter run -d windows
